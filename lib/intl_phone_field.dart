@@ -1,6 +1,7 @@
 library intl_phone_field;
 
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -415,6 +416,28 @@ class _IntlPhoneFieldState extends State<IntlPhoneField> {
         );
       },
       onChanged: (value) async {
+        // Handle pasted numbers with country code
+        if (value.startsWith('+')) {
+          // Extract the country code and remaining number
+          final numericValue = value.replaceAll(RegExp(r'[^0-9]'), '');
+          if (numericValue.length > 1) {
+            // Try to find a matching country by the country code
+            final countryCode = numericValue.substring(0, min(numericValue.length, 4));
+            final newCountry = countries.firstWhere(
+              (country) => country.fullCountryCode == countryCode,
+              orElse: () => _selectedCountry,
+            );
+            
+            if (newCountry != _selectedCountry) {
+              setState(() {
+                _selectedCountry = newCountry;
+                // Remove the country code from the value
+                value = numericValue.substring(countryCode.length);
+              });
+            }
+          }
+        }
+
         final phoneNumber = PhoneNumber(
           countryISOCode: _selectedCountry.code,
           countryCode: '+${_selectedCountry.fullCountryCode}',
@@ -430,7 +453,9 @@ class _IntlPhoneFieldState extends State<IntlPhoneField> {
       validator: (value) {
         if (value == null || !isNumeric(value)) return validatorMessage;
         if (!widget.disableLengthCheck) {
-          return value.length >= _selectedCountry.minLength && value.length <= _selectedCountry.maxLength
+          // Only count numerical digits for length check
+          final numericLength = value.replaceAll(RegExp(r'[^0-9]'), '').length;
+          return numericLength >= _selectedCountry.minLength && numericLength <= _selectedCountry.maxLength
               ? null
               : widget.invalidNumberMessage;
         }
